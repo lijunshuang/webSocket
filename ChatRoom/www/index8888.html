@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=\, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+<style>
+*{margin:0;padding:0;}
+.left{
+    width:20%;height:100%;float:left;border: 1px solid #000;margin:0 1px 0 0;padding:5px;
+}
+.left #username{
+    width:90%;height:30px;
+}
+.left #btnlogin{
+
+}
+#info{}
+#info span{color:red;}
+.right{
+    width:75%;height:100%;float: left;
+}
+</style>
+<script src="http://localhost:8080/socket.io/socket.io.js"></script>
+<script src="http://code.jquery.com/jquery-2.1.1.min.js" ></script> 
+<script>
+    let username = null;
+    let socket = io.connect('http://localhost:8080')
+    socket.on('connect',()=>{
+        console.log('connected to server');
+        $('#info').html('<span>connected to server success</span>')
+        socket.on('login success',data=>{
+            console.log('login success',data)
+            username = data.username
+            $('#info').html('<span>login success</span>')
+            refreshOnlineUsers(data.allusers)
+        })
+        socket.on('disconnect',()=>{
+            console.log('disconnect')
+            $("#info").html('<span>failed to connected to server</span>')
+            username = null
+        })
+        
+        socket.on('login failed', ()=>{
+            $("#info").html('<span>用户名不存在</span>')
+            $("#onlineusers").empty()
+            username = null
+        })
+        
+        socket.on('new message', data=>{
+            console.log(`receiver message from ${data.fromUser}${data.date} ${data.msg}\n`)
+        })
+
+        socket.on('update myself', data=>{
+            $("#message").val('')
+            let val = $("#chathistory").val()
+            $("#chathistory").val(`${val+username}[${data.date}]: ${data.msg}\n`)
+        })
+
+        socket.on('enter chat', data=>{
+            console.log(`${data.username} has entered the chat`);
+            refreshOnlineUsers(data.allusers)
+        })
+
+        socket.on('leave chat', data=>{
+            console.log(`${data.username} has leaved the chat`);
+            refreshOnlineUsers(data.allusers)
+        })
+    });
+    onselectchange = (checkbox) => {
+        let tousers = $(".touser")
+        if(checkbox.checked){
+            for (let i = 0; i < tousers.length; i++) {
+                tousers[i].checked = true
+            }
+        }else{
+            for (let i = 0; i < tousers.length; i++) {
+                tousers[i].checked = false
+            }
+        }
+    }
+    // 发送消息
+    sendmsg = () => {
+        if(username == null){
+            alert('please login first')
+            return
+        }
+        let msg = $('#message').val();
+        if(msg==null || msg.toString().trim()==''){
+            alert("内容不能为空")
+            return
+        }
+        let checkbox = $('.touser');
+        let tousers=[],broadcast=false;
+        for (let i = 0; i < checkbox.length; i++) {
+            if(checkbox[i].checked){
+                tousers.push($(checkbox[i]).attr('value'))
+            }
+        }
+        if(tousers.length === 0){
+            alert('至少选择一个聊天对象')
+            return
+        }
+        if($("#selectall").attr('checked')==true){
+            broadcast = true;
+            socket.emit('new message',{
+                fromUser:username,
+                broadcast:true,
+                msg:msg
+            })
+        }else{
+            socket.emit('new message',{
+                fromUser:username,
+                tousers:tousers,
+                msg:msg
+            })
+        }
+    }
+    //刷新在线用户
+    refreshOnlineUsers = (data) => {
+        if(username == '') return
+        $('#onlineusers').empty()
+        let item;
+        if(data.length == 1 && data[0] === username){
+            $("#onlineusers".append('<div style="color:#f00">没有其他在线用户</div>'));
+            return
+        }
+        for(let i=0;i<data.length;i++){
+            if(data[i] != username){
+                item = `<div>${data[i]}<input type="checkbox" name="touser" class="touser" value=${data[i]}/></div>`
+                $("onlineusers").append(item)
+            }
+        }
+    }
+    //登录
+    login = () => {
+        let username = $('#username').val().trim().toLowerCase();
+        if(username == ''){
+            alert('please enter the username')
+            return
+        }
+        socket.emit('login',{username:username})
+    }
+</script>
+</head>
+<body>
+    <div class="chatBox">
+        <div class="left">
+            <div>
+                <input type="text" name="username" id="username" placeholder="enter your name">
+            </div>
+            <div>
+                <input type="button" id="btnlogin" value="Login" onclick="login()" >
+            </div>
+            <div id="info"></div>
+            <div class="">
+                <div>
+                    Select all &nbsp;
+                    <input type="checkbox" id="selectall" name="selectall" onclick="onselectchange(this)">
+                    </div>
+                <div id="onlineusers"></div>
+            </div>
+        </div>
+
+        <div class="right">
+            <textarea name="" id="chathistory" cols="30" rows="10"></textarea>
+            <div class="msgBox">
+                <textarea name="" id="message" cols="30" rows="10"></textarea>
+                <input type="button" value="Send" id="send" onclick="sendmsg()">
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

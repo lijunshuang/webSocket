@@ -1,0 +1,181 @@
+<html>
+<head>
+	<script src="http://localhost:8080/socket.io/socket.io.js"></script>
+	<script src="http://code.jquery.com/jquery-2.1.1.min.js" ></script> 
+	<style type="text/css">
+	.left{
+		width:20%;
+		float:left;
+		height:80%;
+		border:solid 1px grey;
+		margin:0 1px 0 0px;
+		padding:5px;
+	}
+	.right{
+		width:75%;
+		float:left;
+		height:100%;
+	}
+	
+	#btnlogin{
+	 
+	}
+	
+	</style>
+	<script type="text/javascript">	
+	var username = null;
+	var socket = io.connect('http://localhost:8080');	
+	socket.on('connect',function(){
+		console.log('connected to server');	
+		$('#info').html('<span style="color:red;">connected to server success</span>');	
+		socket.on('login success',function(data){
+			console.log('login success');
+			username = data.username;
+			$('#info').html('<span style="color:red;">login success</span>');	
+			
+			refreshOnlineUsers(data.allusers);
+		});
+		
+		socket.on('disconnect',function(){
+			console.log('disconnect');
+			$('#info').html('<span style="color:red;">failed to connected to server </span>');
+			username = null;	
+		});
+	
+		socket.on('login failed',function(){
+			$('#info').html('<span style="color:red;">用户名不存在</span>');
+			$('#onlineusers').empty();	
+			username = null;	
+		});
+	
+		socket.on('new message',function(data){
+			console.log('receiver message from '+data.fromUser +' '+data.date+ ' '+data.msg);
+			var val = $('textarea[id=chathistory]').val();
+			$('textarea[id=chathistory]').val(val + data.fromUser + ' ['+data.date+'] ：' + data.msg + '\n');
+		});
+		
+		socket.on('update myself',function(data){
+			$('textarea[id=message]').val('');
+			var val = $('textarea[id=chathistory]').val();
+			$('textarea[id=chathistory]').val(val + username + ' ['+data.date+'] ：'+ data.msg + '\n');
+		});
+	
+		socket.on('enter chat',function(data){
+			console.log(data.username+' has entered the chat');
+			refreshOnlineUsers(data.allusers);
+		});
+	
+		socket.on('leave chat',function(data){
+			console.log(data.username + ' has leaved the chat');
+			refreshOnlineUsers(data.allusers);
+		});
+	});
+	
+	function onselectchange(checkbox){
+		var tousers = $('input[name=touser]');
+		var i;
+		
+		if(checkbox.checked){
+			for(i=0;i<tousers.length;i++){
+				tousers[i].checked = true;
+			}
+		}else{
+			for(i=0;i<tousers.length;i++){
+				tousers[i].checked = false;
+			}
+		}
+	}
+	
+	function sendmsg(){
+		if(username === null){
+			alert('please login first');
+			return;
+		}
+		
+		var msg = $('#message').val();
+		
+		if(msg==null||msg.toString().trim()==''){
+			alert('内容不能为空');
+			return;
+		}
+		var checkbox = $('input[name=touser]');
+		var i,tousers=[],broadcast=false;
+ 
+		for(i=0;i<checkbox.length;i++){
+			if(checkbox[i].checked){
+				tousers.push($(checkbox[i]).attr('value'));
+			}
+		}
+		
+		if(tousers.length === 0){
+			alert('至少选择一个聊天对象');
+			return;
+		}
+		
+		if($('input[name=selectall][type=checkbox]').attr('checked')==true){
+			broadcast = true;
+			socket.emit('new message',{fromUser:username,broadcast:true,msg:msg});		
+		}else{
+			socket.emit('new message',{fromUser:username,tousers:tousers,msg:msg});		
+		}
+		
+		// $('textarea[id=message]').val('');
+		// 		var val = $('textarea[id=chathistory]').val();
+		// 		$('textarea[id=chathistory]').val(val + username + ' ['+new Date()+'] ：'+ msg + '\n');
+	}
+	
+	function refreshOnlineUsers(data){
+		if(username == null){
+			return;
+		}
+		
+		$('#onlineusers').empty();	
+		var item,i;
+		
+		if(data.length === 1 && data[0]===username){
+			$('#onlineusers').append('<div style="color:#f00;">没有其它在线用户!</div>');	
+			return;
+		}
+	    
+		for(i=0;i<data.length;i++){
+			if(data[i] != username){
+				item = "<div>"+data[i]+'<input type="checkbox" name="touser" value="'+data[i]+'"></div>';
+				$('#onlineusers').append(item);	
+			}
+		}
+	}
+	
+	function login(){
+		var username = $('input[name=username]').val().trim().toLowerCase();
+		if(username == ''){
+			alert('please enter the username');
+			return;
+		}
+		socket.emit('login',{username:username});
+	}
+ 
+	</script>
+</head>
+<body>
+	<div class="left">
+		<div><input type="text" name="username" style="width:90%;height:30px;" placeholder="enter your name"></div>
+		<div><input type="button" class="login" value="Login" onclick="login();" id="btnlogin" ></div>
+		
+		<div id="info"></div>
+		<div style="margin-top:10px;">
+			<div>Select All&nbsp;&nbsp;<input type="checkbox" name="selectall"  onclick="onselectchange(this);"></div>
+			<div id="onlineusers">
+			</div>	
+		</div>
+	</div>
+	<div class="right">
+		<div>
+			<textarea style="width:90%;height:400px;" id="chathistory" disabled="disabled"></textarea>
+		</div>
+		<div>
+			<textarea style="width:80%;" rows="5" id="message"></textarea>
+			<input type="button" value="Send" id="send" onclick="sendmsg();">
+		</div>
+	</div>
+</body>
+</html>
